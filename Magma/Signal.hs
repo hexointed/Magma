@@ -1,8 +1,7 @@
-{-# LANGUAGE FlexibleInstances #-}
-
 module Magma.Signal where
 
 import Magma.Base
+import Magma.Signalable
 
 data Gate
 	= Not
@@ -28,32 +27,23 @@ instance Signalable a => Show (Signal a) where
 		| otherwise = error "unknown"
 	show (Sig g sigs) = show g ++ show sigs
 
-class Eq a => Signalable a where
-	high  :: a
-	low   :: a
-
-instance Signalable Bool where
-	high = True
-	low  = False
-
 instance Signalable a => Signalable (Signal a) where
-	high = Val high
-	low  = Val low
+	high  = Val high
+	low   = Val low
+	nots  = Sig Not . (:[])
+	ands  = Sig And
+	nands = Sig Nand
+	ors   = Sig Or
+	nors  = Sig Nor
+	xors  = Sig Xor
+	xnors = Sig Xnor
+	
+not2 :: Signalable a => Signal a -> Signal a
+not2 = nots
 
-not2 :: Signal Bool -> Signal Bool
-not2 a    = Sig Not [a]
-
-and2, nand2, or2, nor2, xor2, xnor2 :: Signal Bool -> Signal Bool -> Signal Bool
 and2  a b = Sig And  [a, b]
 nand2 a b = Sig Nand [a, b]
 or2   a b = Sig Or   [a, b]
 nor2  a b = Sig Nor  [a, b]
 xor2  a b = Sig Xor  [a, b]
 xnor2 a b = Sig Xnor [a, b]
-
-andl  xs = Sig And  xs
-nandl xs = Sig Nand xs
-orl   xs = Sig Or   xs
-norl  xs = Sig Nor  xs
-xorl  xs = Sig Xor  xs
-xnorl xs = Sig Xnor xs

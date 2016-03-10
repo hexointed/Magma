@@ -1,31 +1,31 @@
-{-# LANGUAGE FlexibleInstances #-}
-
-module Magma.Optim (optimize, propagate) where 
+module Magma.Optim  where 
 
 import Data.Maybe
 import Magma.Base
 import Magma.Signal
 import Magma.Explicit
+import Magma.Signalable
 
-highS, lowS :: Signalable a => S a Int
+highS, lowS :: Signalable a => Sig a
 highS = D high []
 lowS  = D low []
 
+highS', lowS' :: Signalable a => SRef a -> Bool
 highS' = ((== highS) . snd)
 lowS'  = ((== lowS) . snd)
 
-optimize :: Signal Bool -> IO (Signal Bool)
+optimize :: Signalable a => Signal a -> IO (Signal a)
 optimize = undefined
 
-propagate :: Signal Bool -> IO (Signal Bool)
+propagate :: Signalable a => Signal a -> IO (Signal a)
 propagate s = do
 	s' <- toExplicit s
 	return $ toSignal $ valProp s'
 
-valProp :: [(Int, S Bool Int)] -> [(Int, S Bool Int)]
+valProp :: Signalable a => Explicit a -> Explicit a
 valProp m = valProp' m [] [1]
 
-valProp' :: [(Int, S Bool Int)] -> [Int] -> [Int] -> [(Int, S Bool Int)]
+valProp' :: Signalable a => Explicit a -> [Int] -> [Int] -> Explicit a
 valProp' m vs []     = m
 valProp' m vs (n:ns)
 	| n `elem` vs = valProp' m vs ns
@@ -37,7 +37,7 @@ valProp' m vs (n:ns)
 				Just (V v sigs) -> []
 				Just (D a sigs) -> []
 
-valProp'' :: [(Int, S Bool Int)] -> Int -> [(Int, S Bool Int)]
+valProp'' :: Signalable a => Explicit a -> Int -> Explicit a
 valProp'' map n = replaceWith (\(x,_) -> x==n) (n, this') map
 	where
 		this' = valProp''' this sigs'
@@ -47,7 +47,7 @@ valProp'' map n = replaceWith (\(x,_) -> x==n) (n, this') map
 			Just s@(V v sigs) -> (s, sigs)
 			Just s@(D a sigs) -> (s, sigs)
 
-valProp''' :: S Bool Int -> Explicit Bool -> S Bool Int
+valProp''' :: Signalable a => Sig a -> Explicit a -> Sig a
 valProp''' h@(V v _) xs = h
 valProp''' h@(D d _) xs = h
 
@@ -94,7 +94,7 @@ valProp''' (S Xor _) xs
 		ys  -> S Xor $ map fst ys
 		where 
 			ts = filter highS' xs
-			ys = filter (not . highS') $ filter (not . lowS') xs
+			ys = filter (nots . highS') $ filter (nots . lowS') xs
 
 valProp''' (S Xnor _) xs
 	| odd $ length ts = case ys of
@@ -107,6 +107,6 @@ valProp''' (S Xnor _) xs
 		ys  -> S Xnor $ map fst ys
 		where
 			ts = filter highS' xs
-			ys = filter (not . highS') $ filter (not . lowS') xs
+			ys = filter (nots . highS') $ filter (nots . lowS') xs
 
 valProp''' h@(S g _) xs = h

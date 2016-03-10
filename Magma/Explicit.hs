@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -8,8 +7,6 @@ import Data.Reify
 import Data.Maybe
 import Control.Applicative 
 import Data.Traversable
-import System.IO.Unsafe
-import Magma.Base
 import Magma.Signal
 
 data S a signal 
@@ -18,7 +15,9 @@ data S a signal
 	| V String [signal]
 	deriving Eq
 
-type Explicit a = [(Int, S a Int)]
+type Sig a = S a Int
+type SRef a = (Int, Sig a)
+type Explicit a = [SRef a]
 
 instance MuRef (Signal a) where
 	type DeRef (Signal a) = S a

@@ -1,19 +1,18 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Magma.Arith (fullAdder, rc_adder, cla_adder) where
+module Magma.Arith (fullAdder, rc_adder, cla_adder, bitConst) where
 
 import Magma.Signal
 import Magma.Base
 
-instance Num [Signal Bool] where
+instance Signalable a => Num [Signal a] where
 	(+) a b = sum where (sum, carry) = rc_adder a b low
 	(*) = undefined
 	abs = bitAbs
 	signum as = take 1 as ++ [group2Fold or2 high (tail as)]
 	negate = bitNegate
-	fromInteger = bitConst
-
+	fromInteger = bitConst'
 
 fullAdder a b c = (sum, carry)
 	where 
@@ -60,13 +59,13 @@ bitNegate a = sum
 		z = map (\x -> low) a
 		a' = map not2 a
 
-bitConst :: Integral a => a -> [Signal Bool]
-bitConst as
+bitConst' :: (Integral a, Signalable b) => a -> [Signal b]
+bitConst' as
 	| as >= 0   = reverse $ bitConst'' as
 	| otherwise = bitNegate $ reverse $ bitConst'' (-as)
-
-bitConst' length a = filll length (head as) as
-	where as = bitConst a
+	
+bitConst length a = filll length (head as) as
+	where as = bitConst' a
 
 bitConst'' 0    = [low]
 bitConst'' (-1) = [high]
