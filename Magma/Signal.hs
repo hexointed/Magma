@@ -52,3 +52,9 @@ or2   a b = Sig Or   [a, b]
 nor2  a b = Sig Nor  [a, b]
 xor2  a b = Sig Xor  [a, b]
 xnor2 a b = Sig Xnor [a, b]
+
+same :: Variable -> Variable -> Ordering
+same (Single a0) (Single a1) = compare a0 a1
+same (Multiple _ a0) (Multiple _ a1) = compare a0 a1
+same (Single _) (Multiple _ _) = LT
+same (Multiple _ _) (Single _) = GT
