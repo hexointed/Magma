@@ -12,7 +12,7 @@ import Magma.Signal
 data S a signal 
 	= S Gate [signal]
 	| D a [signal]
-	| V String [signal]
+	| V Variable [signal]
 	deriving Eq
 
 type Sig a = S a Int
@@ -21,13 +21,13 @@ type Explicit a = [SRef a]
 
 instance MuRef (Signal a) where
 	type DeRef (Signal a) = S a
-	mapDeRef f   (Val s)   = D s <$> traverse f ([] :: [Signal a])
-	mapDeRef f   (Var s)   = V s <$> traverse f ([] :: [Signal a])
-	mapDeRef f h@(Sig g s) = S g <$> traverse f s
+	mapDeRef f   (Val s)    = D s <$> traverse f ([] :: [Signal a])
+	mapDeRef f   (Var s xs) = V s <$> traverse f xs
+	mapDeRef f h@(Sig g s)  = S g <$> traverse f s
 
 instance (Show a, Show signal) => Show (S a signal) where
 	show (D sig  sigs) = show sig
-	show (V sig  sigs) = show sig
+	show (V sig  sigs) = show sig ++ show sigs
 	show (S gate sigs) = "S <" ++ show gate ++ "> " ++ show sigs
 
 toExplicit :: Signal a -> IO (Explicit a)
@@ -39,7 +39,7 @@ toSignal :: Explicit a -> Signal a
 toSignal links = head $ map snd nodeLookupList 
 	where
 		mkNode (lbl, S g adj) = (lbl, Sig g $ map lookupNode adj)
-		mkNode (lbl, V v adj) = (lbl, Var v)
+		mkNode (lbl, V v adj) = (lbl, Var v $ map lookupNode adj)
 		mkNode (lbl, D d adj) = (lbl, Val d)
 		nodeLookupList = map mkNode links
 		lookupNode lbl = fromJust $ lookup lbl nodeLookupList

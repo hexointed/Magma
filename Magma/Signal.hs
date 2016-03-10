@@ -13,14 +13,19 @@ data Gate
 	| Xnor
 	deriving (Show, Eq, Enum)
 
+data Variable
+	= Single String
+	| Multiple Int String
+	deriving (Show, Eq)
+
 data Signal a
-	= Var String
+	= Var Variable [Signal a]
 	| Val a
 	| Sig Gate [Signal a]
 	deriving Eq
 
 instance Signalable a => Show (Signal a) where
-	show (Var s) = s
+	show (Var s xs) = show s ++ ":" ++ show xs
 	show (Val v)
 		| v == high = "high"
 		| v == low  = "low"

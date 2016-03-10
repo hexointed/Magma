@@ -4,6 +4,7 @@
 module Magma.Arith (fullAdder, rc_adder, cla_adder, bitConst) where
 
 import Magma.Signal
+import Magma.Signalable
 import Magma.Base
 
 instance Signalable a => Num [Signal a] where
