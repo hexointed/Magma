@@ -13,11 +13,6 @@ data Gate
 	| Xnor
 	deriving (Show, Eq, Enum)
 
-data Variable
-	= Single String
-	| Multiple Int String
-	deriving (Show, Eq)
-
 data Signal a
 	= Var Variable [Signal a]
 	| Val a
@@ -25,7 +20,9 @@ data Signal a
 	deriving Eq
 
 instance Signalable a => Show (Signal a) where
-	show (Var s xs) = show s ++ ":" ++ show xs
+	show (Var s xs) = show s ++ case xs of
+		[] -> ""
+		xs -> ":" ++ show xs
 	show (Val v)
 		| v == high = "high"
 		| v == low  = "low"
@@ -53,8 +50,23 @@ nor2  a b = Sig Nor  [a, b]
 xor2  a b = Sig Xor  [a, b]
 xnor2 a b = Sig Xnor [a, b]
 
-same :: Variable -> Variable -> Ordering
-same (Single a0) (Single a1) = compare a0 a1
-same (Multiple _ a0) (Multiple _ a1) = compare a0 a1
-same (Single _) (Multiple _ _) = LT
-same (Multiple _ _) (Single _) = GT
+data Variable
+	= Single String
+	| Multiple Int String
+
+instance Ord Variable where
+	compare (Single a0) (Single a1) = compare a0 a1
+	compare (Multiple _ a0) (Multiple _ a1) = compare a0 a1
+	compare (Single _) (Multiple _ _) = LT
+	compare (Multiple _ _) (Single _) = GT
+
+instance Eq Variable where
+	(==) a b = (==EQ) $ compare a b
+
+instance Show Variable where
+	show (Single s) = s
+	show (Multiple i s) = s ++ "(" ++ show i ++ ")"
+
+getName :: Variable -> String
+getName (Single s)     = s
+getName (Multiple n s) = s

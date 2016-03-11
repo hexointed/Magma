@@ -1,10 +1,16 @@
 module Magma.Base where
 
 import Data.Maybe
+import qualified Data.List as List
 
 mapHead :: (a -> a) -> [a] -> [a]
 mapHead f [] = []
 mapHead f (x:xs) = f x : xs
+
+map' :: (a -> a) -> [a] -> [a]
+map' f []     = []
+map' f [x]    = [x]
+map' f (x:xs) = f x : map' f xs
 
 filll :: Int -> a -> [a] -> [a]
 filll n y ys = replicate (n - length ys) y ++ ys
@@ -30,6 +36,9 @@ tail' (a:as) (b:bs) = tail' as bs
 group :: Int -> [a] -> [[a]]
 group n [] = []
 group n xs = take n xs : group n (drop n xs)
+
+group' :: Ord a => [a] -> [[a]]
+group' = List.group . List.sort
 
 groupFold :: Int -> (a -> a -> a) -> a -> [a] -> a
 groupFold n f b []  = b

@@ -43,3 +43,8 @@ toSignal links = head $ map snd nodeLookupList
 		mkNode (lbl, D d adj) = (lbl, Val d)
 		nodeLookupList = map mkNode links
 		lookupNode lbl = fromJust $ lookup lbl nodeLookupList
+
+getDeps :: S a signal -> [signal]
+getDeps (S g s) = s
+getDeps (D a s) = s
+getDeps (V v s) = s
