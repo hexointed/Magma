@@ -3,38 +3,44 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
 
-module Magma.Export where
+module Magma.Export (Target, write, write', var, vector) where
 
 import Magma.Signalable
+import Magma.Listable
 import Magma.Explicit
 import Magma.Signal
 import Magma.Optim
 import Magma.Base
-import qualified Data.List as List
-import Data.Foldable
-import Data.Traversable
+import Data.List 
 import Data.Char
 
 data Target
 	= Vhdl
 
-outputs = Multiple 0 "outputs"
+var :: String -> Signal Bool
+var s = Var (Single s) []
 
-write :: (Signalable a, Show a, Foldable c) => 
-	Target ->
-	String ->
-	c Variable -> 
-	c (Signal a) 
-	-> IO ()
-write Vhdl name outs f = do
+vector :: Int -> String -> [Signal Bool]
+vector n s = reverse $ map (\x -> Var (Multiple x s) []) [0 .. n - 1]
+
+write' lang name outs f = write lang allOptims name outs f
+
+write :: Listable c => Target -> [Optimizer Bool] -> String -> c -> c -> IO ()
+write lang opts name outs f = do
+	if not (listsEq outs f) 
+		then error "outputs don't match" 
+		else (return ())
 	graph <- toExplicit $ 
-		Var outputs $ zipWith (\x y -> Var x [y]) 
-			(toList outs) (toList f)
-	let o = output name $ tail graph
+		Var (Single "out") $ zipWith (\x y -> setDep x y) (list outs) (list f)
+	graph' <- toExplicit $ optimize opts (toSignal graph)
+	let o = output lang name $ tail graph'
 	putStrLn o
 
-output :: Signalable a => String -> Explicit a -> String
-output name graph = unlines $
+output :: Target -> String -> Explicit Bool -> String
+output Vhdl = outputVhdl
+
+outputVhdl :: String -> Explicit Bool -> String
+outputVhdl name graph = unlines $
 	"library ieee;" :
 	"use ieee.std_logic_1164.all;" :
 	"" :
@@ -70,8 +76,9 @@ output name graph = unlines $
 				map (\(V v vs) -> v) $
 				filter (\(V v vs) -> not $ null vs) vars
 			vars = map snd $ filter isVar graph
-			vectorize 1 = "?"
-			vectorize n = "_vector (" ++ show (n-1) ++ " downto 0)"
+
+setDep :: Signal Bool -> Signal Bool -> Signal Bool
+setDep (Var v vs) s = Var v [s]
 
 getType :: [Variable] -> String
 getType (x:[]) = "std_logic"
@@ -115,12 +122,7 @@ gateTranslate Vhdl (n, S g ns) =
 	" <= " ++ 
 	map toLower (show g) ++ 
 	" ( " ++
-	List.concat ( map' (++" & ") $ map (\n -> "w" ++ show n) ns) ++
+	concat ( map' (++" & ") $ map (\n -> "w" ++ show n) ns) ++
 	" );"
 
-var :: String -> Signal Bool
-var s = Var (Single s) []
-
-vector :: Int -> String -> [Signal Bool]
-vector n s = reverse $ map (\x -> Var (Multiple x s) []) [0 .. n - 1]
 

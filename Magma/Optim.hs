@@ -6,6 +6,11 @@ import Magma.Signal
 import Magma.Explicit
 import Magma.Signalable
 
+type Optimizer a = Explicit a -> Int -> Explicit a
+
+allOptims :: Signalable a => [Optimizer a]
+allOptims = [valProp'']
+
 highS, lowS :: Signalable a => Sig a
 highS = D high []
 lowS  = D low []
@@ -14,7 +19,7 @@ highS', lowS' :: Signalable a => SRef a -> Bool
 highS' = ((== highS) . snd)
 lowS'  = ((== lowS) . snd)
 
-optimize :: Signalable a => Signal a -> IO (Signal a)
+optimize :: Signalable a => [Optimizer a] -> Signal a -> Signal a
 optimize = undefined
 
 propagate :: Signalable a => Signal a -> IO (Signal a)
