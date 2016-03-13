@@ -48,3 +48,7 @@ getDeps :: S a signal -> [signal]
 getDeps (S g s) = s
 getDeps (D a s) = s
 getDeps (V v s) = s
+
+gateEq :: Gate -> S a signal -> Bool
+gateEq g' (S g s) = g == g'
+gateEq _  _       = False

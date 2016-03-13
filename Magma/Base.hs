@@ -56,7 +56,10 @@ group2Fold f b as
 	| otherwise        = group2Fold f b ((group2Fold f b $ init as) : [last as])
 
 lookupM :: Eq a => [a] -> [(a, b)] -> [b]
-lookupM keys m' = map (\n -> fromJust $ lookup n m') keys
+lookupM keys m' = map (\n -> lookup' n m') keys
+
+lookup' :: Eq a => a -> [(a, b)] -> b
+lookup' key map = fromJust $ lookup key map
 
 replaceWith :: (a -> Bool) -> a -> [a] -> [a]
 replaceWith f a []     = []

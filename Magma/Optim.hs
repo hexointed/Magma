@@ -1,5 +1,8 @@
+{-# LANGUAGE MultiWayIf #-}
+
 module Magma.Optim  where 
 
+import Data.List
 import Data.Maybe
 import Magma.Base
 import Magma.Signal
@@ -9,7 +12,7 @@ import Magma.Signalable
 type Optimizer a = Explicit a -> Int -> Explicit a
 
 allOptims :: Signalable a => [Optimizer a]
-allOptims = [valProp'']
+allOptims = [valuePropagate, gateCombine, notElim]
 
 highS, lowS :: Signalable a => Sig a
 highS = D high []
@@ -19,76 +22,125 @@ highS', lowS' :: Signalable a => SRef a -> Bool
 highS' = ((== highS) . snd)
 lowS'  = ((== lowS) . snd)
 
-optimize :: Signalable a => [Optimizer a] -> Signal a -> Signal a
-optimize = undefined
+optimize :: (Signalable a, Show a) => [Optimizer a] -> Signal a -> IO (Signal a)
+optimize opts sig = do
+	graph <- toExplicit sig
+	return $ toSignal $ runOptimizer opts graph
 
-propagate :: Signalable a => Signal a -> IO (Signal a)
-propagate s = do
-	s' <- toExplicit s
-	return $ toSignal $ valProp s'
+runOptimizer :: Signalable a => [Optimizer a] -> Explicit a -> Explicit a
+runOptimizer opts m = runOptimizer' opts m [] [1]
 
-valProp :: Signalable a => Explicit a -> Explicit a
-valProp m = valProp' m [] [1]
-
-valProp' :: Signalable a => Explicit a -> [Int] -> [Int] -> Explicit a
-valProp' m vs []     = m
-valProp' m vs (n:ns)
-	| n `elem` vs = valProp' m vs ns
-	| otherwise   = valProp'' m' n
+runOptimizer' :: Signalable a => 
+	[Optimizer a] -> Explicit a -> [Int] -> [Int] -> Explicit a
+runOptimizer' opts m vs []     = m
+runOptimizer' opts m vs (n:ns)
+	| n `elem` vs = runOptimizer' opts m vs ns
+	| otherwise   = foldr ($) m' (map (\o -> (\g -> o g n)) opts)   --opts m' n
  		where 
-			m' = valProp' m (n:vs) (ns' ++ ns)
+			m' = runOptimizer' opts m (n:vs) (ns' ++ ns)
 			ns' = case lookup n m of
 				Just (S g sigs) -> sigs
-				Just (V v sigs) -> []
-				Just (D a sigs) -> []
+				Just (V v sigs) -> sigs
+				Just (D a sigs) -> sigs
 
-valProp'' :: Signalable a => Explicit a -> Int -> Explicit a
-valProp'' map n = replaceWith (\(x,_) -> x==n) (n, this') map
+gateCombine :: Signalable a => Explicit a -> Int -> Explicit a
+gateCombine m n = (\r -> replaceWith (\(x,_) -> x==n) r m) $
+	case lookup' n m of
+		V v    vs  -> (n, V v vs)
+		D d    ds  -> (n, D d ds)
+		S And xs   -> (n, S And  (zs xs And))
+		S Nand xs  -> (n, S Nand (zs xs And))
+		S Or xs    -> (n, S Or   (zs xs Or))
+		S Nor xs   -> (n, S Nor  (zs xs Or))
+		S Xor xs   -> (n, S Xor  (zs xs Xor))
+		S Xnor xs  -> (n, S Xnor (zs xs Xnor))
+		s          -> (n, s)
+		where
+			ys xs g = filter (\n -> (gateEq g) $ lookup' n m) xs
+			ws xs g = filter (\n -> (not . gateEq g) $ lookup' n m) xs
+			zs xs g = concat (map getDeps $ lookupM (ys xs g) m) ++ ws xs g
+
+notElim :: Signalable a => Explicit a -> Int -> Explicit a
+notElim m n = (\r -> replaceWith (\(x,_) -> x==n) r m) $
+	case lookup' n m of
+		V v    vs  -> (n, V v vs)
+		D d    ds  -> (n, D d ds)
+		
+		S Not  [x] -> case lookup' x m of
+			S Not [y] -> (n, lookup' y m)
+			S And ys  -> (n, S Nand ys)
+			S Nand ys -> (n, S And ys)
+			S Or ys   -> (n, S Nor ys)
+			S Nor ys  -> (n, S Or ys)
+			S Xor ys  -> (n, S Xnor ys)
+			S Xnor ys -> (n, S Xor ys)
+			_         -> (n, S Not [x])
+
+		S And xs   -> let ys = lookupM xs m in if
+			| all (gateEq Not) ys -> (n, S Nand $ concat $ map getDeps ys)
+			| otherwise           -> (n, S And xs)
+		
+		S Or  xs   -> let ys = lookupM xs m in if
+			| all (gateEq Not) ys -> (n, S Nand $ concat $ map getDeps ys)
+			| otherwise           -> (n, S Or xs)
+
+		S Xor xs   -> let ys = lookupM xs m in if
+			| all (gateEq Not) ys -> (n, S Xor $ concat $ map getDeps ys)
+			| otherwise           -> (n, S Xor xs)
+
+		S Xnor xs  -> let ys = lookupM xs m in if
+			| all (gateEq Not) ys -> (n, S Xnor $ concat $ map getDeps ys)
+			| otherwise           -> (n, S Xnor xs)
+		
+		s          -> (n, s) 
+
+valuePropagate :: Signalable a => Explicit a -> Int -> Explicit a
+valuePropagate map n = replaceWith (\(x,_) -> x==n) (n, this') map
 	where
-		this' = valProp''' this sigs'
+		this' = valuePropagate' this sigs'
 		sigs' = zip sigs $ lookupM sigs map
 		(this, sigs) = case lookup n map of
 			Just s@(S g sigs) -> (s, sigs)
 			Just s@(V v sigs) -> (s, sigs)
 			Just s@(D a sigs) -> (s, sigs)
 
-valProp''' :: Signalable a => Sig a -> Explicit a -> Sig a
-valProp''' h@(V v _) xs = h
-valProp''' h@(D d _) xs = h
+valuePropagate' :: Signalable a => Sig a -> Explicit a -> Sig a
+valuePropagate' h@(V v _) xs = h
+valuePropagate' h@(D d _) xs = h
 
-valProp''' (S Not _) [(i, D d [])]
+valuePropagate' (S Not _) [(i, D d [])]
 	| d == low  = highS
 	| otherwise = lowS
 	
-valProp''' (S And _) xs
+valuePropagate' (S And _) xs
 	| any lowS' xs = lowS
-	| otherwise    = case filter highS' xs of
+	| otherwise    = case filter (not . highS') xs of
 		[]  -> highS
 		[y] -> snd y
 		ys  -> S And $ map fst ys
 
-valProp''' (S Nand _) xs
+valuePropagate' (S Nand _) xs
 	| any lowS' xs = highS
-	| otherwise    = case filter highS' xs of
+	| otherwise    = case filter (not . highS') xs of
 		[]  -> lowS
 		[y] -> S Not [fst y]
 		ys  -> S Nand $ map fst ys
 
-valProp''' (S Or _) xs
+valuePropagate' (S Or _) xs
 	| any highS' xs = highS
-	| otherwise     = case filter lowS' xs of
+	| otherwise     = case filter (not . lowS') xs of
 		[]  -> lowS
 		[y] -> snd y
 		ys  -> S Or $ map fst ys
 
-valProp''' (S Nor _) xs
+valuePropagate' (S Nor _) xs
 	| any highS' xs = lowS
-	| otherwise     = case filter lowS' xs of
+	| otherwise     = case filter (not . lowS') xs of
 		[]  -> highS
 		[y] -> S Not [fst y]
 		ys  -> S Nor $ map fst ys
 
-valProp''' (S Xor _) xs
+valuePropagate' (S Xor _) xs
 	| odd $ length ts = case ys of
 		[]  -> highS
 		[y] -> S Not [fst y]
@@ -98,10 +150,10 @@ valProp''' (S Xor _) xs
 		[y] -> snd y
 		ys  -> S Xor $ map fst ys
 		where 
-			ts = filter highS' xs
-			ys = filter (nots . highS') $ filter (nots . lowS') xs
+			ts = filter (not . highS') xs
+			ys = filter (not . highS') $ filter (not . lowS') xs
 
-valProp''' (S Xnor _) xs
+valuePropagate' (S Xnor _) xs
 	| odd $ length ts = case ys of
 		[]  -> lowS
 		[y] -> snd y
@@ -111,7 +163,7 @@ valProp''' (S Xnor _) xs
 		[y] -> S Not [fst y]
 		ys  -> S Xnor $ map fst ys
 		where
-			ts = filter highS' xs
-			ys = filter (nots . highS') $ filter (nots . lowS') xs
+			ts = filter (not . highS') xs
+			ys = filter (not . highS') $ filter (not . lowS') xs
 
-valProp''' h@(S g _) xs = h
+valuePropagate' h@(S g _) xs = h

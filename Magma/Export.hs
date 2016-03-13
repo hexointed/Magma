@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
 
-module Magma.Export (Target, write, write', var, vector) where
+module Magma.Export (Target(..), write, write', var, vector) where
 
 import Magma.Signalable
 import Magma.Listable
@@ -30,11 +30,13 @@ write lang opts name outs f = do
 	if not (listsEq outs f) 
 		then error "outputs don't match" 
 		else (return ())
-	graph <- toExplicit $ 
-		Var (Single "out") $ zipWith (\x y -> setDep x y) (list outs) (list f)
-	graph' <- toExplicit $ optimize opts (toSignal graph)
-	let o = output lang name $ tail graph'
+	let sig = combine $ zipWith (\x y -> setDep x y) (list outs) (list f)
+	sig' <- optimize opts sig
+	graph <- toExplicit sig'
+	let o = output lang name $ tail graph
 	putStrLn o
+		where
+			combine = Var (Single "out")
 
 output :: Target -> String -> Explicit Bool -> String
 output Vhdl = outputVhdl
@@ -81,8 +83,8 @@ setDep :: Signal Bool -> Signal Bool -> Signal Bool
 setDep (Var v vs) s = Var v [s]
 
 getType :: [Variable] -> String
-getType (x:[]) = "std_logic"
-getType xs     = "std_logic_vector (" ++ show (length xs - 1) ++ " downto 0)"
+getType [Single _] = "std_logic"
+getType xs         = "std_logic_vector(" ++ show (length xs - 1) ++ " downto 0)"
 
 isVar :: SRef a -> Bool
 isVar (n, V _ _) = True
@@ -114,8 +116,8 @@ gateTranslate Vhdl (n, D a ns) =
 	"w" ++
 	show n ++
 	" <= " ++
-	if | a == high -> "1"
-	   | a == low  -> "0"
+	if | a == high -> "\'1\'"
+	   | a == low  -> "\'0\'"
 gateTranslate Vhdl (n, S g ns) = 
 	"w" ++ 
 	show n ++ 
