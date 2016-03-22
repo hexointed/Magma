@@ -70,3 +70,12 @@ instance Show Variable where
 getName :: Variable -> String
 getName (Single s)     = s
 getName (Multiple n s) = s
+
+invert :: Gate -> Gate
+invert And  = Nand
+invert Nand = And
+invert Or   = Nor
+invert Nor  = Or
+invert Xor  = Xnor
+invert Xnor = Xor
+invert g    = g

@@ -66,3 +66,9 @@ replaceWith f a []     = []
 replaceWith f a (x:xs)
 	| f x       = a : replaceWith f a xs
 	| otherwise = x : replaceWith f a xs
+
+undup :: Eq a => [a] -> [a]
+undup (x:y:xs)
+	| x == y    = undup xs
+	| otherwise = x : undup (y:xs)
+undup xs        = xs

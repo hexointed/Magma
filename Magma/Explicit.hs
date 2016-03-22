@@ -44,11 +44,14 @@ toSignal links = head $ map snd nodeLookupList
 		nodeLookupList = map mkNode links
 		lookupNode lbl = fromJust $ lookup lbl nodeLookupList
 
-getDeps :: S a signal -> [signal]
-getDeps (S g s) = s
-getDeps (D a s) = s
-getDeps (V v s) = s
+deps :: S a signal -> [signal]
+deps (S g s) = s
+deps (D a s) = s
+deps (V v s) = s
 
 gateEq :: Gate -> S a signal -> Bool
 gateEq g' (S g s) = g == g'
 gateEq _  _       = False
+
+fanout :: Int -> Explicit a -> Int
+fanout i = length . filter id . map (any (==i) . deps . snd)

@@ -12,7 +12,7 @@ import Magma.Signalable
 type Optimizer a = Explicit a -> Int -> Explicit a
 
 allOptims :: Signalable a => [Optimizer a]
-allOptims = [valuePropagate, gateCombine, notElim]
+allOptims = [valuePropagate, gateCombine, notElim, eqGate]
 
 highS, lowS :: Signalable a => Sig a
 highS = D high []
@@ -43,56 +43,92 @@ runOptimizer' opts m vs (n:ns)
 				Just (V v sigs) -> sigs
 				Just (D a sigs) -> sigs
 
+replaceOptimizer m n r = replaceWith (\(x,_) -> x==n) (n, r) m
+
 gateCombine :: Signalable a => Explicit a -> Int -> Explicit a
-gateCombine m n = (\r -> replaceWith (\(x,_) -> x==n) r m) $
+gateCombine m n = replaceOptimizer m n $
 	case lookup' n m of
-		V v    vs  -> (n, V v vs)
-		D d    ds  -> (n, D d ds)
-		S And xs   -> (n, S And  (zs xs And))
-		S Nand xs  -> (n, S Nand (zs xs And))
-		S Or xs    -> (n, S Or   (zs xs Or))
-		S Nor xs   -> (n, S Nor  (zs xs Or))
-		S Xor xs   -> (n, S Xor  (zs xs Xor))
-		S Xnor xs  -> (n, S Xnor (zs xs Xnor))
-		s          -> (n, s)
+		S And xs   -> S And  (zs xs And)
+		S Nand xs  -> S Nand (zs xs And)
+		S Or xs    -> S Or   (zs xs Or)
+		S Nor xs   -> S Nor  (zs xs Or)
+		S Xor xs   -> S Xor  (zs xs Xor)
+		S Xnor xs  -> S Xnor (zs xs Xnor)
+		s          -> s
 		where
 			ys xs g = filter (\n -> (gateEq g) $ lookup' n m) xs
 			ws xs g = filter (\n -> (not . gateEq g) $ lookup' n m) xs
-			zs xs g = concat (map getDeps $ lookupM (ys xs g) m) ++ ws xs g
+			zs xs g = concat (map deps $ lookupM (ys xs g) m) ++ ws xs g
 
 notElim :: Signalable a => Explicit a -> Int -> Explicit a
-notElim m n = (\r -> replaceWith (\(x,_) -> x==n) r m) $
+notElim m n = replaceOptimizer m n $
 	case lookup' n m of
-		V v    vs  -> (n, V v vs)
-		D d    ds  -> (n, D d ds)
-		
 		S Not  [x] -> case lookup' x m of
-			S Not [y] -> (n, lookup' y m)
-			S And ys  -> (n, S Nand ys)
-			S Nand ys -> (n, S And ys)
-			S Or ys   -> (n, S Nor ys)
-			S Nor ys  -> (n, S Or ys)
-			S Xor ys  -> (n, S Xnor ys)
-			S Xnor ys -> (n, S Xor ys)
-			_         -> (n, S Not [x])
+			S Not [y] -> lookup' y m
+			S And ys  -> S Nand ys
+			S Nand ys -> S And ys
+			S Or ys   -> S Nor ys
+			S Nor ys  -> S Or ys
+			S Xor ys  -> S Xnor ys
+			S Xnor ys -> S Xor ys
+			_         -> S Not [x]
 
 		S And xs   -> let ys = lookupM xs m in if
-			| all (gateEq Not) ys -> (n, S Nand $ concat $ map getDeps ys)
-			| otherwise           -> (n, S And xs)
+			| all (gateEq Not) ys -> S Nand $ concat $ map deps ys
+			| otherwise           -> S And xs
+		
+		S Nand xs  -> let ys = lookupM xs m in if
+			| all (gateEq Not) ys -> S And  $ concat $ map deps ys
+			| otherwise           -> S Nand xs
 		
 		S Or  xs   -> let ys = lookupM xs m in if
-			| all (gateEq Not) ys -> (n, S Nand $ concat $ map getDeps ys)
-			| otherwise           -> (n, S Or xs)
-
+			| all (gateEq Not) ys -> S Nand $ concat $ map deps ys
+			| otherwise           -> S Or xs
+		
+		S Nor xs   -> let ys = lookupM xs m in if
+			| all (gateEq Not) ys -> S Or   $ concat $ map deps ys
+			| otherwise           -> S Nor xs
+		
 		S Xor xs   -> let ys = lookupM xs m in if
-			| all (gateEq Not) ys -> (n, S Xor $ concat $ map getDeps ys)
-			| otherwise           -> (n, S Xor xs)
+			| all (gateEq Not) ys -> S Xor  $ concat $ map deps ys
+			| otherwise           -> S Xor xs
 
 		S Xnor xs  -> let ys = lookupM xs m in if
-			| all (gateEq Not) ys -> (n, S Xnor $ concat $ map getDeps ys)
-			| otherwise           -> (n, S Xnor xs)
+			| all (gateEq Not) ys -> S Xnor $ concat $ map deps ys
+			| otherwise           -> S Xnor xs
 		
-		s          -> (n, s) 
+		s          -> s
+
+eqGate :: Signalable a => Explicit a -> Int -> Explicit a
+eqGate m n = replaceOptimizer m n $
+	case lookup' n m of
+		S And xs  -> case nub xs of
+			[y] -> lookup' y m
+			ys  -> S And ys
+		
+		S Nand xs -> case nub xs of
+			[y] -> S Not [y]
+			ys  -> S Nand ys
+		
+		S Or xs   -> case nub xs of
+			[y] -> lookup' y m
+			ys  -> S Or ys
+		
+		S Nor xs  -> case nub xs of
+			[y] -> S Not [y]
+			ys  -> S Nor ys
+		
+		S Xor xs  -> case undup $ sort xs of
+			[]  -> lowS
+			[y] -> lookup' y m
+			ys  -> S Xor ys
+		
+		S Xnor xs -> case undup $ sort xs of
+			[]  -> highS
+			[y] -> S Not [y]
+			ys  -> S Xnor ys
+			
+		s         -> s
 
 valuePropagate :: Signalable a => Explicit a -> Int -> Explicit a
 valuePropagate map n = replaceWith (\(x,_) -> x==n) (n, this') map
