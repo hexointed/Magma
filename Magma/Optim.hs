@@ -12,7 +12,7 @@ import Magma.Signalable
 type Optimizer a = Explicit a -> Int -> Explicit a
 
 allOptims :: Signalable a => [Optimizer a]
-allOptims = [valuePropagate, gateCombine, notElim, eqGate]
+allOptims = [valuePropagate, gateCombine, eqGate, eqElim, notElim]
 
 highS, lowS :: Signalable a => Sig a
 highS = D high []
@@ -130,12 +130,24 @@ eqGate m n = replaceOptimizer m n $
 			
 		s         -> s
 
+eqElim :: Signalable a => Explicit a -> Int -> Explicit a
+eqElim m n = let e = lookup' n m in
+	map (\(i,s) ->
+		(,) i $
+		replaceDeps s $
+		foldr ($) (deps s) $
+		map (\f -> replaceWith f n) $
+		map (==) $
+		map fst $
+		filter (\(i,s) -> s == e && i /= n) m
+	) m
+
 valuePropagate :: Signalable a => Explicit a -> Int -> Explicit a
-valuePropagate map n = replaceWith (\(x,_) -> x==n) (n, this') map
+valuePropagate m n = replaceWith (\(x,_) -> x==n) (n, this') m
 	where
 		this' = valuePropagate' this sigs'
-		sigs' = zip sigs $ lookupM sigs map
-		(this, sigs) = case lookup n map of
+		sigs' = zip sigs $ lookupM sigs m
+		(this, sigs) = case lookup n m of
 			Just s@(S g sigs) -> (s, sigs)
 			Just s@(V v sigs) -> (s, sigs)
 			Just s@(D a sigs) -> (s, sigs)

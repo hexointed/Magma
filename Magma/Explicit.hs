@@ -5,6 +5,7 @@ module Magma.Explicit where
 
 import Data.Reify
 import Data.Maybe
+import Data.List
 import Control.Applicative 
 import Data.Traversable
 import Magma.Signal
@@ -13,7 +14,6 @@ data S a signal
 	= S Gate [signal]
 	| D a [signal]
 	| V Variable [signal]
-	deriving Eq
 
 type Sig a = S a Int
 type SRef a = (Int, Sig a)
@@ -29,6 +29,12 @@ instance (Show a, Show signal) => Show (S a signal) where
 	show (D sig  sigs) = show sig
 	show (V sig  sigs) = show sig ++ show sigs
 	show (S gate sigs) = "S <" ++ show gate ++ "> " ++ show sigs
+
+instance (Eq a, Ord signal) => Eq (S a signal) where
+	(==) (S g ss) (S h ts) = g == h && sort ss == sort ts
+	(==) (D a ss) (D b ts) = a == b && sort ss == sort ts
+	(==) (V v ss) (V w ts) = v == w && sort ss == sort ts
+	(==) _        _        = False
 
 toExplicit :: Signal a -> IO (Explicit a)
 toExplicit s = do
@@ -55,3 +61,8 @@ gateEq _  _       = False
 
 fanout :: Int -> Explicit a -> Int
 fanout i = length . filter id . map (any (==i) . deps . snd)
+
+replaceDeps :: S a signal -> [signal] -> S a signal
+replaceDeps (S g _) xs = S g xs
+replaceDeps (D a _) xs = D a xs
+replaceDeps (V v _) xs = V v xs
