@@ -126,5 +126,3 @@ gateTranslate Vhdl (n, S g ns) =
 	" ( " ++
 	concat ( map' (++" & ") $ map (\n -> "w" ++ show n) ns) ++
 	" );"
-
-

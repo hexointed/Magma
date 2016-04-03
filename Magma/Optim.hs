@@ -6,13 +6,14 @@ import Data.List
 import Data.Maybe
 import Magma.Base
 import Magma.Signal
+import Magma.Pattern
 import Magma.Explicit
 import Magma.Signalable
 
 type Optimizer a = Explicit a -> Int -> Explicit a
 
 allOptims :: Signalable a => [Optimizer a]
-allOptims = [valuePropagate, gateCombine, eqGate, eqElim, notElim]
+allOptims = [gateCombine, eqElim, eqGate, notElim, valuePropagate]
 
 highS, lowS :: Signalable a => Sig a
 highS = D high []
@@ -141,6 +142,17 @@ eqElim m n = let e = lookup' n m in
 		map fst $
 		filter (\(i,s) -> s == e && i /= n) m
 	) m
+
+compEqElim :: Signalable a => Optimizer a
+compEqElim m n = replaceOptimizer m n $
+	let e = lookup' n m in if
+		| (n, m) `matches` ands  [pat "a", nots $ pat "a"] -> lowS
+		| (n, m) `matches` nands [pat "a", nots $ pat "a"] -> highS
+		| (n, m) `matches` ors   [pat "a", nots $ pat "a"] -> highS
+		| (n, m) `matches` nors  [pat "a", nots $ pat "a"] -> lowS
+		| (n, m) `matches` xors  [pat "a", nots $ pat "a"] -> highS
+		| (n, m) `matches` xnors [pat "a", nots $ pat "a"] -> lowS
+		| otherwise                                        -> e
 
 valuePropagate :: Signalable a => Explicit a -> Int -> Explicit a
 valuePropagate m n = replaceWith (\(x,_) -> x==n) (n, this') m

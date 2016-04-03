@@ -15,3 +15,4 @@ import Magma.Explicit
 import Magma.Optim
 import Magma.Export
 import Magma.Arith
+import Magma.Pattern
