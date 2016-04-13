@@ -13,7 +13,7 @@ import Magma.Signalable
 type Optimizer a = Explicit a -> Int -> Explicit a
 
 allOptims :: Signalable a => [Optimizer a]
-allOptims = [gateCombine, eqElim, eqGate, notElim, valuePropagate]
+allOptims = [gateCombine, eqElim, eqGate, notElim, compEqElim, valuePropagate]
 
 highS, lowS :: Signalable a => Sig a
 highS = D high []
@@ -46,7 +46,7 @@ runOptimizer' opts m vs (n:ns)
 
 replaceOptimizer m n r = replaceWith (\(x,_) -> x==n) (n, r) m
 
-gateCombine :: Signalable a => Explicit a -> Int -> Explicit a
+gateCombine :: Signalable a => Optimizer a
 gateCombine m n = replaceOptimizer m n $
 	case lookup' n m of
 		S And xs   -> S And  (zs xs And)
@@ -61,7 +61,7 @@ gateCombine m n = replaceOptimizer m n $
 			ws xs g = filter (\n -> (not . gateEq g) $ lookup' n m) xs
 			zs xs g = concat (map deps $ lookupM (ys xs g) m) ++ ws xs g
 
-notElim :: Signalable a => Explicit a -> Int -> Explicit a
+notElim :: Signalable a => Optimizer a
 notElim m n = replaceOptimizer m n $
 	case lookup' n m of
 		S Not  [x] -> case lookup' x m of
@@ -100,7 +100,7 @@ notElim m n = replaceOptimizer m n $
 		
 		s          -> s
 
-eqGate :: Signalable a => Explicit a -> Int -> Explicit a
+eqGate :: Signalable a => Optimizer a
 eqGate m n = replaceOptimizer m n $
 	case lookup' n m of
 		S And xs  -> case nub xs of
@@ -131,7 +131,7 @@ eqGate m n = replaceOptimizer m n $
 			
 		s         -> s
 
-eqElim :: Signalable a => Explicit a -> Int -> Explicit a
+eqElim :: Signalable a => Optimizer a
 eqElim m n = let e = lookup' n m in
 	map (\(i,s) ->
 		(,) i $
