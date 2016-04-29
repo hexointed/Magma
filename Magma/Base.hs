@@ -40,6 +40,10 @@ group n xs = take n xs : group n (drop n xs)
 group' :: Ord a => [a] -> [[a]]
 group' = List.group . List.sort
 
+groupWith :: (a -> a -> Bool) -> [a] -> [[a]]
+groupWith f []     = []
+groupWith f (x:xs) = (x : takeWhile (f x) xs) : groupWith f (dropWhile (f x) xs)
+
 groupFold :: Int -> (a -> a -> a) -> a -> [a] -> a
 groupFold n f b []  = b
 groupFold n f b [a] = f a b

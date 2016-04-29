@@ -56,7 +56,9 @@ data Variable
 
 instance Ord Variable where
 	compare (Single a0) (Single a1) = compare a0 a1
-	compare (Multiple _ a0) (Multiple _ a1) = compare a0 a1
+	compare (Multiple i0 a0) (Multiple i1 a1) 
+		| compare a0 a1 == EQ = compare i0 i1
+		| otherwise           = compare a0 a1
 	compare (Single _) (Multiple _ _) = LT
 	compare (Multiple _ _) (Single _) = GT
 

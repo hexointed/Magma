@@ -33,6 +33,7 @@ write lang opts name outs f = do
 	let sig = combine $ zipWith (\x y -> setDep x y) (list outs) (list f)
 	sig' <- optimize opts sig
 	graph <- toExplicit sig'
+	putStrLn $ show graph
 	let o = output lang name $ tail graph
 	putStrLn o
 		where
@@ -63,18 +64,18 @@ outputVhdl name graph = unlines $
 			graph)) :
 	"begin" :
 	(unlines $ map ("\t"++ ) $ map (gateTranslate Vhdl) graph) :
-	("end " ++ name ++ ";") :
+	"end behav;" :
 	[]
 		where
 			ios  = ins ++ outs
 			ins  =
 				map (\xs -> (getName $ head xs) ++ " : in " ++ getType xs) $
-				group' $
+				groupWith (\x y -> getName x == getName y) . sort $
 				map (\(V v vs) -> v) $
 				filter (\(V v vs) -> null vs) vars
 			outs = 
 				map (\xs -> (getName $ head xs) ++ " : out " ++ getType xs) $
-				group' $
+				groupWith (\x y -> getName x == getName y) . sort $
 				map (\(V v vs) -> v) $
 				filter (\(V v vs) -> not $ null vs) vars
 			vars = map snd $ filter isVar graph
@@ -122,7 +123,6 @@ gateTranslate Vhdl (n, S g ns) =
 	"w" ++ 
 	show n ++ 
 	" <= " ++ 
-	map toLower (show g) ++ 
 	" ( " ++
-	concat ( map' (++" & ") $ map (\n -> "w" ++ show n) ns) ++
+	concat ( map' (++" "++ map toLower (show g)++" ") $ map (\n -> "w" ++ show n) ns) ++
 	" );"

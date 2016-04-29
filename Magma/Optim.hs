@@ -46,6 +46,7 @@ runOptimizer' opts m vs (n:ns)
 
 replaceOptimizer m n r = replaceWith (\(x,_) -> x==n) (n, r) m
 
+-- gateCombine reduces multiple nodes with the same operaiton to one node.
 gateCombine :: Signalable a => Optimizer a
 gateCombine m n = replaceOptimizer m n $
 	case lookup' n m of
@@ -61,6 +62,7 @@ gateCombine m n = replaceOptimizer m n $
 			ws xs g = filter (\n -> (not . gateEq g) $ lookup' n m) xs
 			zs xs g = concat (map deps $ lookupM (ys xs g) m) ++ ws xs g
 
+-- notElim removes double negations.
 notElim :: Signalable a => Optimizer a
 notElim m n = replaceOptimizer m n $
 	case lookup' n m of
@@ -100,6 +102,7 @@ notElim m n = replaceOptimizer m n $
 		
 		s          -> s
 
+-- eqGate removes redundant inputs from the node.
 eqGate :: Signalable a => Optimizer a
 eqGate m n = replaceOptimizer m n $
 	case lookup' n m of
@@ -131,6 +134,8 @@ eqGate m n = replaceOptimizer m n $
 			
 		s         -> s
 
+-- eqElim removes references to all other nodes that implement the same function
+-- as this node (and replaces them with references to this node).
 eqElim :: Signalable a => Optimizer a
 eqElim m n = let e = lookup' n m in
 	map (\(i,s) ->
@@ -143,6 +148,8 @@ eqElim m n = let e = lookup' n m in
 		filter (\(i,s) -> s == e && i /= n) m
 	) m
 
+-- compEqElim replaces the node with a constant if the value of the function it
+-- implements can be predetermined.
 compEqElim :: Signalable a => Optimizer a
 compEqElim m n = replaceOptimizer m n $
 	let e = lookup' n m in if
@@ -154,6 +161,7 @@ compEqElim m n = replaceOptimizer m n $
 		| (n, m) `matches` xnors [pat "a", nots $ pat "a"] -> lowS
 		| otherwise                                        -> e
 
+-- valuePropagate simplifies the node if any of its inputs are constants.
 valuePropagate :: Signalable a => Explicit a -> Int -> Explicit a
 valuePropagate m n = replaceWith (\(x,_) -> x==n) (n, this') m
 	where

@@ -13,7 +13,7 @@ instance Signalable a => Num [Signal a] where
 	abs = bitAbs
 	signum as = take 1 as ++ [group2Fold or2 high (tail as)]
 	negate = bitNegate
-	fromInteger = bitConst'
+	fromInteger = undefined
 
 fullAdder a b c = (sum, carry)
 	where 
