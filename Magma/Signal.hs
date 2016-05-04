@@ -1,7 +1,11 @@
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ExistentialQuantification #-}
+
 module Magma.Signal where
 
-import Magma.Base
 import Magma.Signalable
+import Magma.Target
+import Magma.Base
 
 data Gate
 	= Not
@@ -11,12 +15,20 @@ data Gate
 	| Nor
 	| Xor
 	| Xnor
-	deriving (Show, Eq, Enum)
+	deriving (Show, Eq)
+
+data Func
+	= Mux
+	deriving (Show, Eq)
+
+mux :: Signal a -> (Signal a, Signal a) -> Signal a
+mux a (b,c) = Fn Mux [a, b, c]
 
 data Signal a
 	= Var Variable [Signal a]
 	| Val a
 	| Sig Gate [Signal a]
+	| Fn Func [Signal a]
 	deriving Eq
 
 instance Signalable a => Show (Signal a) where
@@ -28,6 +40,7 @@ instance Signalable a => Show (Signal a) where
 		| v == low  = "low"
 		| otherwise = error "unknown"
 	show (Sig g sigs) = show g ++ show sigs
+	show (Fn f sigs) = show f ++ show sigs
 
 instance Signalable a => Signalable (Signal a) where
 	high  = Val high
@@ -40,16 +53,6 @@ instance Signalable a => Signalable (Signal a) where
 	xors  = Sig Xor
 	xnors = Sig Xnor
 	
-not2 :: Signalable a => Signal a -> Signal a
-not2 = nots
-
-and2  a b = Sig And  [a, b]
-nand2 a b = Sig Nand [a, b]
-or2   a b = Sig Or   [a, b]
-nor2  a b = Sig Nor  [a, b]
-xor2  a b = Sig Xor  [a, b]
-xnor2 a b = Sig Xnor [a, b]
-
 data Variable
 	= Single String
 	| Multiple Int String
@@ -72,12 +75,3 @@ instance Show Variable where
 getName :: Variable -> String
 getName (Single s)     = s
 getName (Multiple n s) = s
-
-invert :: Gate -> Gate
-invert And  = Nand
-invert Nand = And
-invert Or   = Nor
-invert Nor  = Or
-invert Xor  = Xnor
-invert Xnor = Xor
-invert g    = g

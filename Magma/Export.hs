@@ -9,13 +9,11 @@ import Magma.Signalable
 import Magma.Listable
 import Magma.Explicit
 import Magma.Signal
+import Magma.Target
 import Magma.Optim
 import Magma.Base
 import Data.List 
 import Data.Char
-
-data Target
-	= Vhdl
 
 var :: String -> Signal Bool
 var s = Var (Single s) []
@@ -126,3 +124,13 @@ gateTranslate Vhdl (n, S g ns) =
 	" ( " ++
 	concat ( map' (++" "++ map toLower (show g)++" ") $ map (\n -> "w" ++ show n) ns) ++
 	" );"
+gateTranslate Vhdl (n, F Mux [s,a,b]) =
+	"with w" ++
+	show s ++
+	" select w" ++
+	show n ++
+	" <= w" ++
+	show a ++
+	" when '0', w" ++
+	show b ++
+	" when '1';"

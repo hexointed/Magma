@@ -26,3 +26,13 @@ instance Signalable Bool where
 		| odd . length $ filter (==True) as = True
 		| otherwise                         = False
 
+not2 :: Signalable a => a -> a
+not2 = nots
+
+and2  a b = ands  [a, b]
+nand2 a b = nands [a, b]
+or2   a b = ors   [a, b]
+nor2  a b = nors  [a, b]
+xor2  a b = xors  [a, b]
+xnor2 a b = xnors [a, b]
+

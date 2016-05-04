@@ -13,7 +13,10 @@ import Magma.Signalable
 type Optimizer a = Explicit a -> Int -> Explicit a
 
 allOptims :: Signalable a => [Optimizer a]
-allOptims = [gateCombine, eqElim, eqGate, notElim, compEqElim, valuePropagate]
+allOptims = 
+	[muxConst, gateCombine, eqElim, 
+	 eqGate, notElim, compEqElim, 
+	 valuePropagate]
 
 highS, lowS :: Signalable a => Sig a
 highS = D high []
@@ -40,13 +43,14 @@ runOptimizer' opts m vs (n:ns)
  		where 
 			m' = runOptimizer' opts m (n:vs) (ns' ++ ns)
 			ns' = case lookup n m of
+				Just (F f sigs) -> sigs
 				Just (S g sigs) -> sigs
 				Just (V v sigs) -> sigs
 				Just (D a sigs) -> sigs
 
 replaceOptimizer m n r = replaceWith (\(x,_) -> x==n) (n, r) m
 
--- gateCombine reduces multiple nodes with the same operaiton to one node.
+-- gateCombine reduces multiple nodes with the same operation to one node.
 gateCombine :: Signalable a => Optimizer a
 gateCombine m n = replaceOptimizer m n $
 	case lookup' n m of
@@ -99,6 +103,10 @@ notElim m n = replaceOptimizer m n $
 		S Xnor xs  -> let ys = lookupM xs m in if
 			| all (gateEq Not) ys -> S Xnor $ concat $ map deps ys
 			| otherwise           -> S Xnor xs
+		
+		F Mux [s,a,b] -> case lookup' s m of
+			S Not [x] -> F Mux [x, b, a]
+			_         -> F Mux [s, a, b]
 		
 		s          -> s
 
@@ -161,6 +169,34 @@ compEqElim m n = replaceOptimizer m n $
 		| (n, m) `matches` xnors [pat "a", nots $ pat "a"] -> lowS
 		| otherwise                                        -> e
 
+-- muxConst simplifies a mux if some of its inputs are constants
+muxConst :: Signalable a => Optimizer a
+muxConst m n = replaceOptimizer m n $
+	case lookup' n m of 
+		F Mux [s,a,b] -> let s' = lookup' s m
+		                     a' = lookup' a m
+		                     b' = lookup' b m in if
+			| s' == highS -> b'
+			| s' == lowS  -> a'
+			| a' == b'    -> a'
+			| a' == lowS  -> S And [s,b]
+			| b' == highS -> S Or [s,a]
+			| otherwise   -> F Mux [s,a,b]
+		
+		s  -> s
+
+-- muxConst creates muxes from logic gates that implement muxes.
+muxIntro :: Signalable a => Optimizer a
+muxIntro m n = replaceOptimizer m n $
+	let e = lookup' n m in if
+		| (n, m) `matches` ors [nand2 s a, and2 s b] -> F Mux dep1
+		| otherwise                                  -> e
+		where
+			s = pat "s"
+			a = pat "a"
+			b = pat "b"
+			dep1 = nub . concat $ map (deps . flip lookup' m) $ deps $ lookup' n m
+
 -- valuePropagate simplifies the node if any of its inputs are constants.
 valuePropagate :: Signalable a => Explicit a -> Int -> Explicit a
 valuePropagate m n = replaceWith (\(x,_) -> x==n) (n, this') m
@@ -171,6 +207,7 @@ valuePropagate m n = replaceWith (\(x,_) -> x==n) (n, this') m
 			Just s@(S g sigs) -> (s, sigs)
 			Just s@(V v sigs) -> (s, sigs)
 			Just s@(D a sigs) -> (s, sigs)
+			Just s@(F f sigs) -> (s, sigs)
 
 valuePropagate' :: Signalable a => Sig a -> Explicit a -> Sig a
 valuePropagate' h@(V v _) xs = h
@@ -234,4 +271,4 @@ valuePropagate' (S Xnor _) xs
 			ts = filter (not . highS') xs
 			ys = filter (not . highS') $ filter (not . lowS') xs
 
-valuePropagate' h@(S g _) xs = h
+valuePropagate' h xs = h
